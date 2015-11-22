@@ -9,6 +9,7 @@ cdef struct s_Z:
   long count
   long *ZV
 
+
 ctypedef s_Z sZ
 
 cdef class Zonemap:
@@ -67,7 +68,7 @@ cdef class Zonemap:
 
   ## INFO
 
-  cpdef list _perftest(self, long nmax, long num_points, long num_lookup)
+  cpdef list _perftest(self, long nmax, long num_points)
 
   cpdef long add_vertex(self, long v1)
 

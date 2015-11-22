@@ -7,8 +7,7 @@ from zonemap import Zonemap
 def main():
 
   nmax = 10000000
-  num_points = 100000
-  num_lookup = 1000000
+  num_points = 200000
   nzs = [20, 30, 40, 60, 80, 100]
 
   for nz in nzs:
@@ -19,7 +18,7 @@ def main():
     print(' ')
 
     ZM = Zonemap(nz)
-    res = ZM._perftest(nmax, num_points, num_lookup)
+    res = ZM._perftest(nmax, num_points)
     for expl, perf in res:
       print('{:s}\t\t{:3.10f}'.format(expl, perf))
     del(ZM)

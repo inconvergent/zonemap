@@ -21,8 +21,6 @@ cdef long SIZE = 1024
 cdef class Zonemap:
 
   def __init__(self, long nz):
-    """
-    """
 
     self.vnum = 0
 
@@ -30,7 +28,7 @@ cdef class Zonemap:
 
     self.nz = nz
 
-    self.total_zones = (2+nz)*(2+nz)
+    self.total_zones = nz*nz
 
     self.greatest_zone_size = SIZE
 
@@ -40,7 +38,7 @@ cdef class Zonemap:
 
   def __cinit__(self, long nz, *arg, **args):
 
-    cdef long total_zones = (2+nz)*(2+nz)
+    cdef long total_zones = nz*nz
 
     self.VZ = <long *>malloc(SIZE*sizeof(long))
 
@@ -50,10 +48,15 @@ cdef class Zonemap:
 
   def __dealloc__(self):
 
-    free(self.VZ)
+    cdef long i
 
-    # TODO: is this a memory leak?
+    for i in xrange(self.total_zones):
+
+      free(self.Z[i].ZV)
+      free(self.Z[i])
+
     free(self.Z)
+    free(self.VZ)
 
     return
 
@@ -76,6 +79,16 @@ cdef class Zonemap:
       z.ZV = <long *>malloc(SIZE*sizeof(long))
 
       self.Z[i] = z
+
+    return
+
+  @cython.wraparound(False)
+  @cython.boundscheck(False)
+  @cython.nonecheck(False)
+  cdef void __assign_xy_arrays(self, double *X, double *Y) nogil:
+
+    self.X = X
+    self.Y = Y
 
     return
 
@@ -186,9 +199,9 @@ cdef class Zonemap:
 
     cdef long nz = self.nz
 
-    cdef long i = 1 + <long>(x*nz)
-    cdef long j = 1 + <long>(y*nz)
-    cdef long z = ((nz+2)*i + j)
+    cdef long i = <long>(x*nz)
+    cdef long j = <long>(y*nz)
+    cdef long z = nz*i + j
 
     return z
 
@@ -227,33 +240,36 @@ cdef class Zonemap:
     the width of each zone.
     """
 
+    cdef long a
+    cdef long b
     cdef long i
     cdef long j
-    cdef sZ *z
-    cdef long zi = self.__get_z(x,y)
+
     cdef long nz = self.nz
+
+    cdef long zx = <long>(x*nz)
+    cdef long zy = <long>(y*nz)
+
+    cdef sZ *z
 
     cdef double dx
     cdef double dy
     cdef double rad2 = rad*rad
 
-    cdef long *neighbors = [
-      zi, zi-1, zi+1,
-      zi-nz-2, zi+nz+2, zi-nz-1,
-      zi-nz-3, zi+nz+1, zi+nz+3
-    ]
+    # TOOD: check middle zone first
 
-    for i in xrange(9):
+    for a in xrange(max(zx-1,0),min(zx+2,nz)):
+      for b in xrange(max(zy-1,0),min(zy+2,nz)):
 
-      z = self.Z[neighbors[i]]
+        z = self.Z[a*nz+b]
 
-      for j in xrange(z.count):
+        for j in xrange(z.count):
 
-        dx = x-self.X[z.ZV[j]]
-        dy = y-self.Y[z.ZV[j]]
+          dx = x-self.X[z.ZV[j]]
+          dy = y-self.Y[z.ZV[j]]
 
-        if dx*dx+dy*dy<rad2:
-          return -1
+          if dx*dx+dy*dy<rad2:
+            return -1
 
     return 1
 
@@ -265,11 +281,17 @@ cdef class Zonemap:
     """
     """
 
+    cdef long a
+    cdef long b
     cdef long i
     cdef long j
-    cdef sZ *z
-    cdef long zi = self.__get_z(x,y)
+
     cdef long nz = self.nz
+
+    cdef long zx = <long>(x*nz)
+    cdef long zy = <long>(y*nz)
+
+    cdef sZ *z
 
     cdef long num = 0
 
@@ -277,37 +299,22 @@ cdef class Zonemap:
     cdef double dy
     cdef double rad2 = rad*rad
 
-    cdef long *neighbors = [
-      zi, zi-1, zi+1,
-      zi-nz-2, zi+nz+2, zi-nz-1,
-      zi-nz-3, zi+nz+1, zi+nz+3
-    ]
+    for a in xrange(max(zx-1,0),min(zx+2,nz)):
+      for b in xrange(max(zy-1,0),min(zy+2,nz)):
 
-    for i in xrange(9):
+        z = self.Z[a*nz+b]
 
-      z = self.Z[neighbors[i]]
+        for j in xrange(z.count):
 
-      for j in xrange(z.count):
+          dx = x-self.X[z.ZV[j]]
+          dy = y-self.Y[z.ZV[j]]
 
-        dx = x-self.X[z.ZV[j]]
-        dy = y-self.Y[z.ZV[j]]
+          if dx*dx+dy*dy<rad2:
 
-        if dx*dx+dy*dy<rad2:
-
-          vertices[num] = z.ZV[j]
-          num += 1
+            vertices[num] = z.ZV[j]
+            num += 1
 
     return num
-
-  @cython.wraparound(False)
-  @cython.boundscheck(False)
-  @cython.nonecheck(False)
-  cdef void __assign_xy_arrays(self, double *X, double *Y) nogil:
-
-    self.X = X
-    self.Y = Y
-
-    return
 
   @cython.wraparound(False)
   @cython.boundscheck(False)
@@ -432,56 +439,57 @@ cdef class Zonemap:
   @cython.wraparound(False)
   @cython.boundscheck(False)
   @cython.nonecheck(False)
-  cpdef list _perftest(self, long nmax, long num_polongs, long num_lookup):
+  cpdef list _perftest(self, long nmax, long num_points):
 
     cdef np.ndarray[double, mode="c",ndim=2] a
     cdef long i
+    cdef long num
     cdef double t1
     cdef double t2
     cdef list res = []
-
+    cdef long asize
+    cdef long *vertices
 
     cdef double *X = <double *>malloc(nmax*sizeof(double))
     cdef double *Y = <double *>malloc(nmax*sizeof(double))
     self.__assign_xy_arrays(X,Y)
 
+    a = np.random.random((num_points,2))
 
-    a = 0.5 + 0.2*(1.0-2.0*np.random.random((num_polongs,2)))
     t1 = time()
-    for i in xrange(num_polongs):
-      X[i] = a[i,0]
-      Y[i] = a[i,1]
-      self.__add_vertex(i)
+    with nogil:
+      for i in xrange(num_points):
+        X[i] = a[i,0]
+        Y[i] = a[i,1]
+        self.__add_vertex(i)
     t2 = time()
     res.append(('add',t2-t1))
 
-
-    a = np.random.random((num_lookup,2))
     t1 = time()
-    for i in xrange(num_lookup):
-      self.__sphere_is_free(a[i,0], a[i,1], 0.03)
+    with nogil:
+      for i in xrange(num_points):
+        self.__sphere_is_free(X[i], Y[i], 1.0/<double>self.nz)
     t2 = time()
     res.append(('free',t2-t1))
 
-
-    a = np.random.random((num_lookup,3))
     t1 = time()
-    cdef long asize = self.__get_max_sphere_count()
-    cdef long *vertices = <long *>malloc(asize*sizeof(long))
-    for i in xrange(num_lookup):
-      self.__sphere_vertices(
-        a[i,0],
-        a[i,1],
-        0.03,
-        vertices
-      )
+    with nogil:
+      asize = self.__get_max_sphere_count()
+      vertices = <long *>malloc(asize*sizeof(long))
+      for i in xrange(num_points):
+        self.__sphere_vertices(
+          X[i],
+          Y[i],
+          1.0/<double>(self.nz),
+          vertices
+        )
     t2 = time()
     res.append(('sphere',t2-t1))
 
-
     t1 = time()
-    for i in xrange(num_polongs):
-      self.__del_vertex(i)
+    with nogil:
+      for i in xrange(num_points):
+        self.__del_vertex(i)
     t2 = time()
     res.append(('del',t2-t1))
 
