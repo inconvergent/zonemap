@@ -23,7 +23,7 @@ extensions = [
 
 setup(
   name = 'zonemap',
-  version = '0.0.4',
+  version = '0.0.5',
   author = '@inconvergent',
   install_requires = ['numpy>=1.8.2', 'cython>=0.20.0'],
   license = 'MIT',

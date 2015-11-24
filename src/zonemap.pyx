@@ -13,8 +13,6 @@ from helpers cimport double_array_init
 import numpy as np
 cimport numpy as np
 
-from time import time
-
 cdef long SIZE = 1024
 
 
@@ -23,13 +21,10 @@ cdef class Zonemap:
   def __init__(self, long nz):
 
     self.vnum = 0
-
     self.vsize = SIZE
 
     self.nz = nz
-
     self.total_zones = nz*nz
-
     self.greatest_zone_size = SIZE
 
     self.__init_zones()
@@ -129,12 +124,8 @@ cdef class Zonemap:
   @cython.boundscheck(False)
   @cython.nonecheck(False)
   cdef long __del_vertex(self, long v1) nogil:
-    """
-    """
 
-    cdef long z1 = self.VZ[v1]
-
-    self.__remove_v_from_zone(z1, v1)
+    self.__remove_v_from_zone(self.VZ[v1], v1)
     self.VZ[v1] = -1
 
     return 1
@@ -194,8 +185,6 @@ cdef class Zonemap:
   @cython.boundscheck(False)
   @cython.nonecheck(False)
   cdef long __get_z(self, double x, double y) nogil:
-    """
-    """
 
     cdef long nz = self.nz
 
@@ -213,7 +202,6 @@ cdef class Zonemap:
     cdef double x = self.X[v1]
     cdef double y = self.Y[v1]
     cdef long new_z = self.__get_z(x, y)
-
     cdef long old_z = self.VZ[v1]
 
     if old_z<0:
@@ -229,7 +217,6 @@ cdef class Zonemap:
 
     return -1
 
-
   @cython.wraparound(False)
   @cython.boundscheck(False)
   @cython.nonecheck(False)
@@ -243,7 +230,6 @@ cdef class Zonemap:
     cdef long a
     cdef long b
     cdef long i
-    cdef long j
 
     cdef long nz = self.nz
 
@@ -257,16 +243,15 @@ cdef class Zonemap:
     cdef double rad2 = rad*rad
 
     # TOOD: check middle zone first
-
     for a in xrange(max(zx-1,0),min(zx+2,nz)):
       for b in xrange(max(zy-1,0),min(zy+2,nz)):
 
         z = self.Z[a*nz+b]
 
-        for j in xrange(z.count):
+        for i in xrange(z.count):
 
-          dx = x-self.X[z.ZV[j]]
-          dy = y-self.Y[z.ZV[j]]
+          dx = x-self.X[z.ZV[i]]
+          dy = y-self.Y[z.ZV[i]]
 
           if dx*dx+dy*dy<rad2:
             return -1
@@ -278,13 +263,10 @@ cdef class Zonemap:
   @cython.nonecheck(False)
   @cython.cdivision(True)
   cdef long __sphere_vertices(self, double x, double y, double rad, long *vertices) nogil:
-    """
-    """
 
     cdef long a
     cdef long b
     cdef long i
-    cdef long j
 
     cdef long nz = self.nz
 
@@ -304,14 +286,14 @@ cdef class Zonemap:
 
         z = self.Z[a*nz+b]
 
-        for j in xrange(z.count):
+        for i in xrange(z.count):
 
-          dx = x-self.X[z.ZV[j]]
-          dy = y-self.Y[z.ZV[j]]
+          dx = x-self.X[z.ZV[i]]
+          dy = y-self.Y[z.ZV[i]]
 
           if dx*dx+dy*dy<rad2:
 
-            vertices[num] = z.ZV[j]
+            vertices[num] = z.ZV[i]
             num += 1
 
     return num
@@ -329,7 +311,6 @@ cdef class Zonemap:
   cdef void __encode_zonemap(self, long *a) nogil:
 
     cdef long z
-    cdef long i
     cdef long s
     cdef sZ *zone
 
@@ -338,7 +319,7 @@ cdef class Zonemap:
     a[2] = self.total_zones
     a[3] = self.greatest_zone_size
 
-    i = 4
+    cdef long i = 4
     for z in xrange(self.total_zones):
 
       zone = self.Z[z]
@@ -440,6 +421,8 @@ cdef class Zonemap:
   @cython.boundscheck(False)
   @cython.nonecheck(False)
   cpdef list _perftest(self, long nmax, long num_points):
+
+    from time import time
 
     cdef np.ndarray[double, mode="c",ndim=2] a
     cdef long i
